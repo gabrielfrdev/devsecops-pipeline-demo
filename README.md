@@ -25,3 +25,4 @@ npm start
 - PATCH /findings/:id
 - DELETE /findings/:id
 - **Semgrep** - SAST with OWASP, JavaScript, and Node.js rulesets. Findings go to the Security tab.
+- **Trivy** - Docker image scan, results uploaded via SARIF.
