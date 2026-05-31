@@ -26,3 +26,4 @@ npm start
 - DELETE /findings/:id
 - **Semgrep** - SAST with OWASP, JavaScript, and Node.js rulesets. Findings go to the Security tab.
 - **Trivy** - Docker image scan, results uploaded via SARIF.
+- **Checkov** - static analysis on the Dockerfile and workflow files.
