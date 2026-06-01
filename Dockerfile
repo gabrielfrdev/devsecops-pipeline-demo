@@ -2,10 +2,12 @@
 
 WORKDIR /app
 
-COPY package*.json ./
+COPY --chown=node:node package*.json ./
 RUN npm install --production
 
-COPY src/ ./src/
+COPY --chown=node:node src/ ./src/
+
+USER node
 
 EXPOSE 3000
 
