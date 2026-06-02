@@ -1,0 +1,14 @@
+{
+  "name": "devsecops-pipeline-demo",
+  "version": "0.1.0",
+  "description": "test bed for ci security tooling",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js"
+  },
+  "dependencies": {
+    "express": "4.17.1",
+    "lodash": "4.17.4"
+  }
+}
