@@ -1,0 +1,35 @@
+﻿name: Bug
+description: Something in the pipeline or API isn't working right
+labels: ["bug"]
+body:
+  - type: input
+    id: summary
+    attributes:
+      label: What happened?
+      placeholder: Short description
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - pipeline / github actions
+        - api
+        - docker
+        - other
+    validations:
+      required: true
