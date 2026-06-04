@@ -54,6 +54,10 @@ app.delete('/findings/:id', (req, res) => {
   res.status(204).send();
 });
 
-app.listen(PORT, () => {
-  console.log('listening on :' + PORT);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log('listening on :' + PORT);
+  });
+}
+
+module.exports = app;
