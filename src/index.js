@@ -10,6 +10,10 @@ const AWS_SECRET_ACCESS_KEY = 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY';
 
 app.use(express.json());
 
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
 app.get('/users', (req, res) => {
   const users = [
     { id: 1, name: 'Alice', role: 'admin' },
