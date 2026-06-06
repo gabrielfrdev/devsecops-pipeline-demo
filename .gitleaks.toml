@@ -1,0 +1,12 @@
+title = "gitleaks config"
+
+[extend]
+useDefault = true
+
+# custom rule on top of the defaults - catches generic hardcoded tokens
+# that the default ruleset might miss depending on naming convention
+[[rules]]
+id = "generic-api-token"
+description = "hardcoded API token"
+regex = '''(?i)(api[_\-]?(token|key|secret))\s*[=:]\s*['"]([a-zA-Z0-9_\-]{20,})['"]'''
+tags = ["key", "generic"]
