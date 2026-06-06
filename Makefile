@@ -8,3 +8,9 @@ scan:
 	docker run --rm \
 	\t-v /var/run/docker.sock:/var/run/docker.sock \
 	\taquasec/trivy image --severity HIGH,CRITICAL demo-app
+
+lint:
+	npm run lint
+
+test:
+	npm test
