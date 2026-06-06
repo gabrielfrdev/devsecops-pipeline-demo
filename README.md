@@ -20,6 +20,7 @@ Runs on push and pull requests to `main`. Can also be triggered manually from th
 ## Setup
 
 ```bash
+cp .env.example .env
 npm install
 npm start
 ```
