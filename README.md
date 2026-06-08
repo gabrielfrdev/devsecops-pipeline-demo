@@ -26,6 +26,15 @@ npm install
 npm start
 ```
 
+or with Docker:
+
+```bash
+docker build -t demo-app .
+docker run --env-file .env -p 3000:3000 demo-app
+```
+
+or just `make run` / `make docker`.
+
 ## Endpoints
 
 - `GET /health`
