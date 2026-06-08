@@ -83,6 +83,19 @@ jobs:
         with:
           sarif_file: trivy.sarif
 
+      - name: generate sbom
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: demo-app
+          format: cyclonedx
+          output: sbom.cdx.json
+          exit-code: '0'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.cdx.json
+
   iac:
     name: checkov
     runs-on: ubuntu-latest
