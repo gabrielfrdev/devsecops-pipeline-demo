@@ -10,6 +10,7 @@ Runs on push and pull requests to `main`. Can also be triggered manually from th
 - **npm audit** - dependency vulnerability check, High and Critical CVEs only.
 - **Semgrep** - static analysis with OWASP and Node.js rulesets, results uploaded to the Security tab via SARIF.
 - **Trivy** - Docker image scan for OS and package vulnerabilities, results uploaded via SARIF.
+- **Checkov** - Dockerfile and GitHub Actions misconfiguration scanning.
 
 ## Vulnerabilities
 
