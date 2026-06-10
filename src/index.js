@@ -1,5 +1,6 @@
 ﻿const express = require('express');
 const _ = require('lodash');
+const { version } = require('../package.json');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -12,6 +13,10 @@ app.use(express.json());
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
+});
+
+app.get('/version', (req, res) => {
+  res.json({ version });
 });
 
 const findings = new Map();
