@@ -23,7 +23,18 @@ const findings = new Map();
 let nextId = 1;
 
 app.get('/findings', (req, res) => {
-  res.json(Array.from(findings.values()));
+  let results = Array.from(findings.values());
+  if (req.query.severity) results = results.filter((f) => f.severity === req.query.severity.toUpperCase());
+  if (req.query.status) results = results.filter((f) => f.status === req.query.status);
+  if (req.query.tool) results = results.filter((f) => f.tool === req.query.tool);
+  res.json(results);
+});
+
+app.get('/findings/:id', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const finding = findings.get(id);
+  if (!finding) return res.status(404).json({ error: 'finding not found' });
+  res.json(finding);
 });
 
 app.post('/findings', (req, res) => {
