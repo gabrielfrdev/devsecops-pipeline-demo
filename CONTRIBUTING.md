@@ -7,7 +7,7 @@ git clone https://github.com/gabrielfrdev/devsecops-pipeline-demo.git
 cd devsecops-pipeline-demo
 cp .env.example .env
 npm install
-```bash
+```
 
 Run it:
 
@@ -15,14 +15,14 @@ Run it:
 npm start
 make run
 docker compose up
-```bash
+```
 
 Before pushing:
 
 ```bash
 npm run lint
 npm test
-```bash
+```
 
 If you have pre-commit installed, gitleaks runs automatically on every commit and blocks anything that looks like a secret.
 

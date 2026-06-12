@@ -1,4 +1,4 @@
-﻿run:
+run:
 	npm install && npm start
 
 docker:
@@ -6,8 +6,8 @@ docker:
 
 scan:
 	docker run --rm \
-	\t-v /var/run/docker.sock:/var/run/docker.sock \
-	\taquasec/trivy image --severity HIGH,CRITICAL demo-app
+		-v /var/run/docker.sock:/var/run/docker.sock \
+		aquasec/trivy image --severity HIGH,CRITICAL demo-app
 
 lint:
 	npm run lint
