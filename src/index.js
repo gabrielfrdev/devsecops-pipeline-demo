@@ -77,7 +77,6 @@ app.patch('/findings/:id', (req, res) => {
   if (req.body.status && !VALID_STATUSES.includes(req.body.status)) {
     return res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(', ')}` });
   }
-  // lodash 4.17.4 - _.merge with user-controlled input
   const updated = _.merge({}, finding, req.body, { updatedAt: new Date().toISOString() });
   findings.set(id, updated);
   res.json(updated);
