@@ -70,7 +70,7 @@ jobs:
         run: docker build -t demo-app .
 
       - name: scan image
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: demo-app
           severity: HIGH,CRITICAL
@@ -84,7 +84,7 @@ jobs:
           sarif_file: trivy.sarif
 
       - name: generate sbom
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: demo-app
           format: cyclonedx
