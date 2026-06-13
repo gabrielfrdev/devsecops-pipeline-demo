@@ -80,6 +80,26 @@ describe('GET /findings', () => {
   });
 });
 
+describe('GET /findings pagination', () => {
+  it('returns x-total-count header', async () => {
+    const res = await request(app).get('/findings');
+    expect(res.headers['x-total-count']).toBeDefined();
+    expect(parseInt(res.headers['x-total-count'], 10)).toBeGreaterThan(0);
+  });
+
+  it('limit restricts results', async () => {
+    const res = await request(app).get('/findings?limit=1');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.length).toBeLessThanOrEqual(1);
+  });
+
+  it('offset advances the window', async () => {
+    const base = await request(app).get('/findings?limit=500');
+    const shifted = await request(app).get('/findings?offset=1&limit=500');
+    expect(shifted.body.length).toBe(Math.max(0, base.body.length - 1));
+  });
+});
+
 describe('GET /findings/:id', () => {
   it('returns a single finding', async () => {
     const created = await request(app)
