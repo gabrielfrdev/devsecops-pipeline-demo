@@ -68,6 +68,16 @@ describe('GET /findings', () => {
     expect(res.statusCode).toBe(200);
     res.body.forEach((f) => expect(f.status).toBe('open'));
   });
+
+  it('filters by tool', async () => {
+    await request(app)
+      .post('/findings')
+      .send({ tool: 'unique-tool-xyz', severity: 'LOW', title: 'filter by tool test' });
+    const res = await request(app).get('/findings?tool=unique-tool-xyz');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.length).toBeGreaterThan(0);
+    res.body.forEach((f) => expect(f.tool).toBe('unique-tool-xyz'));
+  });
 });
 
 describe('GET /findings/:id', () => {
@@ -109,6 +119,27 @@ describe('PATCH /findings/:id', () => {
   it('returns 404 for unknown id', async () => {
     const res = await request(app).patch('/findings/99999').send({ status: 'resolved' });
     expect(res.statusCode).toBe(404);
+  });
+
+  it('sets closedAt when resolved', async () => {
+    const created = await request(app)
+      .post('/findings')
+      .send({ tool: 'trivy', severity: 'MEDIUM', title: 'to be closed' });
+    const res = await request(app)
+      .patch(`/findings/${created.body.id}`)
+      .send({ status: 'resolved' });
+    expect(res.body.status).toBe('resolved');
+    expect(res.body).toHaveProperty('closedAt');
+  });
+
+  it('does not set closedAt for mitigating', async () => {
+    const created = await request(app)
+      .post('/findings')
+      .send({ tool: 'semgrep', severity: 'LOW', title: 'in progress' });
+    const res = await request(app)
+      .patch(`/findings/${created.body.id}`)
+      .send({ status: 'mitigating' });
+    expect(res.body.closedAt).toBeUndefined();
   });
 });
 
