@@ -77,7 +77,11 @@ app.patch('/findings/:id', (req, res) => {
   if (req.body.status && !VALID_STATUSES.includes(req.body.status)) {
     return res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(', ')}` });
   }
-  const updated = _.merge({}, finding, req.body, { updatedAt: new Date().toISOString() });
+  const now = new Date().toISOString();
+  const updated = _.merge({}, finding, req.body, { updatedAt: now });
+  if (req.body.status === 'resolved' && finding.status !== 'resolved') {
+    updated.closedAt = now;
+  }
   findings.set(id, updated);
   res.json(updated);
 });
