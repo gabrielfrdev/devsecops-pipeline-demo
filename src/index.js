@@ -36,7 +36,11 @@ app.get('/findings', (req, res) => {
   if (req.query.severity) results = results.filter((f) => f.severity === req.query.severity.toUpperCase());
   if (req.query.status) results = results.filter((f) => f.status === req.query.status);
   if (req.query.tool) results = results.filter((f) => f.tool === req.query.tool);
-  res.json(results);
+  const total = results.length;
+  const limit = Math.min(parseInt(req.query.limit, 10) || 100, 500);
+  const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+  res.set('X-Total-Count', String(total));
+  res.json(results.slice(offset, offset + limit));
 });
 
 app.get('/findings/:id', (req, res) => {
