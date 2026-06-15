@@ -2,40 +2,29 @@
 
 ![security checks](https://github.com/gabrielfrdev/devsecops-pipeline-demo/actions/workflows/security.yml/badge.svg)
 
-REST API for tracking vulnerability findings from CI security scans. Scanners post their findings here and you track remediation status as issues get worked through.
+Security scanners generate a lot of findings. Those findings usually end up sitting in CI logs, buried in SARIF files, or in a GitHub Security tab that nobody opens. This project is a REST API that gives those findings somewhere to land and be tracked through remediation.
 
-## what it does
+Every push runs 7 security jobs in parallel: Gitleaks for secrets, npm audit for dependency CVEs, Semgrep for SAST, Trivy for the container image, Checkov for IaC, ESLint, and Jest. Semgrep, Trivy, and Checkov upload SARIF to the GitHub Security tab. After a scan, `scripts/ingest-sarif.js` reads the SARIF output and posts each result into the API, where findings move from `open` to `mitigating` to `resolved`. When a finding is resolved, `closedAt` is stamped -- subtract `createdAt` for MTTR.
 
-- CRUD for security findings with tool, severity, title, description, and file fields
-- Status lifecycle: `open` -> `mitigating` -> `resolved`
-- Filter by severity, status, or source tool
-- Summary endpoint for current security posture at a glance
-- Optional API key auth via `x-api-key` header
-- Rate limited to 60 req/min, security headers via helmet
+The API itself is a bit self-referential: `lodash` is pinned to `4.17.4` (prototype pollution via `_.merge`) and there is a hardcoded AWS key in `src/index.js` that Gitleaks catches on every run. The tracker ships with the vulnerabilities it tracks.
 
-## what runs on every push
+## pipeline
 
-| job | what it checks |
-|-----|----------------|
-| gitleaks | secrets and credentials in git history |
-| npm audit | CVEs in dependencies (HIGH and above) |
-| semgrep | SAST with OWASP, JavaScript, and Node.js rulesets |
-| trivy | Docker image vulnerabilities (HIGH and CRITICAL) |
-| checkov | Dockerfile and workflow static analysis |
-| eslint | code quality against eslint:recommended |
-| jest | unit tests with coverage threshold |
+| job | tool | output |
+|-----|------|--------|
+| secrets | Gitleaks | exits 1 on any detected secret |
+| audit | npm audit | exits 1 on HIGH or CRITICAL CVEs |
+| sast | Semgrep | SARIF uploaded to Security tab |
+| container | Trivy | SARIF uploaded to Security tab + CycloneDX SBOM artifact |
+| iac | Checkov | SARIF uploaded to Security tab (soft fail) |
+| lint | ESLint | exits on any lint error |
+| test | Jest | 70% line coverage threshold, coverage artifact uploaded |
 
-Semgrep, Trivy, and Checkov upload findings as SARIF to the GitHub Security tab. Trivy also generates a CycloneDX SBOM saved as a workflow artifact.
-
-## known issues (left in on purpose)
-
-- `src/index.js` has a hardcoded AWS key that Gitleaks catches
-- `lodash` is pinned to `4.17.4` which has a prototype pollution vulnerability. The PATCH route uses `_.merge()` with user input -- the tracker itself has the CVE it tracks
-- `npm audit --audit-level=high` will flag the lodash dep
-
-These are intentional so the pipeline has real findings to surface.
+All jobs run independently so a failure in one does not block the others.
 
 ## setup
+
+Requires Node 18 or later (project uses 22 -- see `.nvmrc`).
 
 ```bash
 cp .env.example .env
@@ -43,9 +32,9 @@ npm install
 npm start
 ```
 
-Set `API_KEY` in `.env` to require authentication on all findings routes.
+Set `API_KEY` in `.env` to require authentication on all finding routes (`x-api-key` header). Leave it blank to run unauthenticated.
 
-With Docker:
+Docker:
 
 ```bash
 docker build -t demo-app .
@@ -59,36 +48,39 @@ pip install pre-commit
 pre-commit install
 ```
 
-Gitleaks runs locally on every commit before anything hits CI.
+Runs Gitleaks locally on every commit before anything reaches CI.
 
 ## ingesting scanner output
 
-After running any scanner that produces SARIF, feed the results into the API:
+After a scan, feed the SARIF file into the API:
 
 ```bash
-# ingest trivy output
+# local scan output
 node scripts/ingest-sarif.js trivy.sarif
 
-# ingest against a remote instance
+# against a remote instance with auth
 API_KEY=secret node scripts/ingest-sarif.js semgrep.sarif http://your-host:3000
-# or via make
+
+# via make
 make ingest SARIF=trivy.sarif API=http://your-host:3000
 ```
 
-The script maps SARIF severity levels to the API's CRITICAL/HIGH/MEDIUM/LOW scale and posts each result as a new finding.
+The script maps SARIF severity levels (`error`, `warning`, `note`) to `CRITICAL`, `HIGH`, `MEDIUM` and posts each result as a new finding.
 
 ## endpoints
 
 | method | path | description |
 |--------|------|-------------|
-| GET | /health | liveness check |
-| GET | /version | returns package version |
-| GET | /findings/summary | counts by severity and status |
-| GET | /findings | list all findings -- `?severity=`, `?status=`, `?tool=` |
-| GET | /findings/:id | get single finding |
-| POST | /findings | create finding |
-| PATCH | /findings/:id | update finding fields |
-| DELETE | /findings/:id | remove finding |
+| GET | /health | liveness |
+| GET | /version | package version |
+| GET | /findings/summary | counts grouped by severity and status |
+| GET | /findings | list -- `?severity=`, `?status=`, `?tool=`, `?limit=`, `?offset=` |
+| GET | /findings/:id | single finding |
+| POST | /findings | create |
+| PATCH | /findings/:id | update status or any field |
+| DELETE | /findings/:id | remove |
+
+`GET /findings` returns `X-Total-Count` in the response header.
 
 POST body:
 
@@ -115,3 +107,9 @@ Summary response:
 Severity: `CRITICAL` `HIGH` `MEDIUM` `LOW`
 
 Status: `open` `mitigating` `resolved`
+
+## known issues (intentional)
+
+- `src/index.js` has a hardcoded AWS key -- Gitleaks detects it on every run
+- `lodash` is pinned to `4.17.4`. The PATCH route calls `_.merge({}, finding, req.body, ...)` with user-controlled input, which is the prototype pollution gadget from that version. The tracker ships with the CVE it tracks.
+- `npm audit --audit-level=high` fails because of the lodash pin
