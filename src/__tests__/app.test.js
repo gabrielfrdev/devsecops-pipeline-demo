@@ -100,6 +100,23 @@ describe('GET /findings pagination', () => {
   });
 });
 
+describe('GET /findings/summary', () => {
+  it('returns total count and breakdowns', async () => {
+    const res = await request(app).get('/findings/summary');
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toHaveProperty('total');
+    expect(res.body).toHaveProperty('bySeverity');
+    expect(res.body).toHaveProperty('byStatus');
+    expect(typeof res.body.total).toBe('number');
+  });
+
+  it('counts reflect current findings', async () => {
+    await request(app).post('/findings').send({ tool: 'trivy', severity: 'CRITICAL', title: 'test' });
+    const res = await request(app).get('/findings/summary');
+    expect(res.body.bySeverity.CRITICAL).toBeGreaterThan(0);
+  });
+});
+
 describe('GET /findings/:id', () => {
   it('returns a single finding', async () => {
     const created = await request(app)
@@ -178,5 +195,36 @@ describe('DELETE /findings/:id', () => {
   it('returns 404 for unknown id', async () => {
     const res = await request(app).delete('/findings/99999');
     expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('auth middleware', () => {
+  beforeAll(() => {
+    process.env.API_KEY = 'test-secret';
+  });
+  afterAll(() => {
+    delete process.env.API_KEY;
+  });
+
+  it('returns 401 on /findings without key', async () => {
+    const res = await request(app).get('/findings');
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('returns 401 with wrong key', async () => {
+    const res = await request(app).get('/findings').set('x-api-key', 'bad');
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('passes with correct key', async () => {
+    const res = await request(app).get('/findings').set('x-api-key', 'test-secret');
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('health and version skip auth', async () => {
+    const h = await request(app).get('/health');
+    const v = await request(app).get('/version');
+    expect(h.statusCode).toBe(200);
+    expect(v.statusCode).toBe(200);
   });
 });
