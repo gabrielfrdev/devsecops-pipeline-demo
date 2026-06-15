@@ -17,6 +17,15 @@ app.use(express.json());
 const limiter = rateLimit({ windowMs: 60 * 1000, max: 60 });
 app.use(limiter);
 
+app.use((req, res, next) => {
+  if (!process.env.API_KEY) return next();
+  if (req.path === '/health' || req.path === '/version') return next();
+  if (req.headers['x-api-key'] !== process.env.API_KEY) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  next();
+});
+
 const VALID_SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
 const VALID_STATUSES = ['open', 'mitigating', 'resolved'];
 
@@ -29,6 +38,17 @@ app.get('/health', (req, res) => {
 
 app.get('/version', (req, res) => {
   res.json({ version });
+});
+
+app.get('/findings/summary', (req, res) => {
+  const all = Array.from(findings.values());
+  const bySeverity = {};
+  const byStatus = {};
+  for (const f of all) {
+    bySeverity[f.severity] = (bySeverity[f.severity] || 0) + 1;
+    byStatus[f.status] = (byStatus[f.status] || 0) + 1;
+  }
+  res.json({ total: all.length, bySeverity, byStatus });
 });
 
 app.get('/findings', (req, res) => {
