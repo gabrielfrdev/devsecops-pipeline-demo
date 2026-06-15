@@ -9,6 +9,9 @@ scan:
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		aquasec/trivy image --severity HIGH,CRITICAL demo-app
 
+ingest:
+	node scripts/ingest-sarif.js $(SARIF) $(API)
+
 lint:
 	npm run lint
 
