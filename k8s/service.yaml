@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: findings-tracker
+  namespace: findings-tracker
+spec:
+  selector:
+    app: findings-tracker
+  ports:
+    - port: 80
+      targetPort: 3000
+  type: ClusterIP
