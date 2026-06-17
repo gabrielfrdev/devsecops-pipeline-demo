@@ -17,6 +17,15 @@ describe('GET /version', () => {
   });
 });
 
+describe('GET /metrics', () => {
+  it('returns prometheus metrics text', async () => {
+    const res = await request(app).get('/metrics');
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toMatch(/text\/plain/);
+    expect(res.text).toContain('findings_total');
+  });
+});
+
 describe('POST /findings', () => {
   it('creates a finding', async () => {
     const res = await request(app).post('/findings').send({
@@ -221,10 +230,12 @@ describe('auth middleware', () => {
     expect(res.statusCode).toBe(200);
   });
 
-  it('health and version skip auth', async () => {
+  it('health, version, and metrics skip auth', async () => {
     const h = await request(app).get('/health');
     const v = await request(app).get('/version');
+    const m = await request(app).get('/metrics');
     expect(h.statusCode).toBe(200);
     expect(v.statusCode).toBe(200);
+    expect(m.statusCode).toBe(200);
   });
 });
