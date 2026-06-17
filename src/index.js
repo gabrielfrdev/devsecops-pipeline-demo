@@ -2,7 +2,20 @@ const express = require('express');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const _ = require('lodash');
+const promClient = require('prom-client');
 const { version } = require('../package.json');
+
+const register = new promClient.Registry();
+if (process.env.NODE_ENV !== 'test') {
+  promClient.collectDefaultMetrics({ register });
+}
+
+const findingsGauge = new promClient.Gauge({
+  name: 'findings_total',
+  help: 'current findings by severity and status',
+  labelNames: ['severity', 'status'],
+  registers: [register],
+});
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -19,7 +32,7 @@ app.use(limiter);
 
 app.use((req, res, next) => {
   if (!process.env.API_KEY) return next();
-  if (req.path === '/health' || req.path === '/version') return next();
+  if (req.path === '/health' || req.path === '/version' || req.path === '/metrics') return next();
   if (req.headers['x-api-key'] !== process.env.API_KEY) {
     return res.status(401).json({ error: 'unauthorized' });
   }
@@ -32,12 +45,24 @@ const VALID_STATUSES = ['open', 'mitigating', 'resolved'];
 const findings = new Map();
 let nextId = 1;
 
+function syncFindingsGauge() {
+  findingsGauge.reset();
+  for (const f of findings.values()) {
+    findingsGauge.inc({ severity: f.severity, status: f.status });
+  }
+}
+
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
 app.get('/version', (req, res) => {
   res.json({ version });
+});
+
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', register.contentType);
+  res.send(await register.metrics());
 });
 
 app.get('/findings/summary', (req, res) => {
@@ -91,6 +116,7 @@ app.post('/findings', (req, res) => {
     updatedAt: now,
   };
   findings.set(finding.id, finding);
+  syncFindingsGauge();
   res.status(201).json(finding);
 });
 
@@ -107,6 +133,7 @@ app.patch('/findings/:id', (req, res) => {
     updated.closedAt = now;
   }
   findings.set(id, updated);
+  syncFindingsGauge();
   res.json(updated);
 });
 
@@ -114,6 +141,7 @@ app.delete('/findings/:id', (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!findings.has(id)) return res.status(404).json({ error: 'finding not found' });
   findings.delete(id);
+  syncFindingsGauge();
   res.status(204).send();
 });
 
