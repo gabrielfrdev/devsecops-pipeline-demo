@@ -145,3 +145,40 @@ jobs:
         with:
           name: coverage
           path: coverage/
+
+  dast:
+    name: zap
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - run: npm install
+
+      - name: start app
+        run: node src/index.js &
+
+      - name: wait for health
+        run: |
+          for i in $(seq 1 15); do
+            curl -sf http://localhost:3000/health && break
+            echo "waiting... ($i)"
+            sleep 2
+          done
+          curl -sf http://localhost:3000/health || (echo "app failed to start" && exit 1)
+
+      - name: zap baseline scan
+        uses: zaproxy/action-baseline-scan@v0.14.0
+        with:
+          target: 'http://localhost:3000'
+          allow_issue_writing: false
+          fail_action: false
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-report
+          path: report_html.html
