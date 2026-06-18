@@ -4,142 +4,60 @@
 
 Security scanners generate a lot of findings. Those findings usually end up sitting in CI logs, buried in SARIF files, or in a GitHub Security tab that nobody opens. This project is a REST API that gives those findings somewhere to land and be tracked through remediation.
 
-Every push runs 8 security jobs in parallel: Gitleaks for secrets, npm audit for dependency CVEs, Semgrep for SAST, Trivy for the container image, Checkov for IaC, ZAP for DAST, ESLint, and Jest. Semgrep, Trivy, and Checkov upload SARIF to the GitHub Security tab. After a scan, `scripts/ingest-sarif.js` reads the SARIF output and posts each result into the API, where findings move from `open` to `mitigating` to `resolved`. When a finding is resolved, `closedAt` is stamped -- subtract `createdAt` for MTTR. The API exposes a Prometheus-compatible `/metrics` endpoint for observability.
+Every push triggers 8 parallel jobs: Gitleaks, npm audit, Semgrep, Trivy, Checkov, ZAP, ESLint, and Jest. Semgrep/Trivy/Checkov push SARIF to the GitHub Security tab. Trivy also generates a CycloneDX SBOM. After a scan, `scripts/ingest-sarif.js` feeds findings into the API, where they move from `open` to `mitigating` to `resolved`. `closedAt` stamps on resolution so you can calculate MTTR.
 
-The API itself is a bit self-referential: `lodash` is pinned to `4.17.4` (prototype pollution via `_.merge`) and there is a hardcoded AWS key in `src/index.js` that Gitleaks catches on every run. The tracker ships with the vulnerabilities it tracks.
+The app has a hardcoded AWS key and lodash 4.17.4 with a known prototype pollution gadget in the PATCH route. Both are intentional -- real findings, not a green board.
 
-## pipeline
-
-| job | tool | output |
-|-----|------|--------|
-| secrets | Gitleaks | exits 1 on any detected secret |
-| audit | npm audit | exits 1 on HIGH or CRITICAL CVEs |
-| sast | Semgrep | SARIF uploaded to Security tab |
-| container | Trivy | SARIF uploaded to Security tab + CycloneDX SBOM artifact |
-| iac | Checkov | SARIF uploaded to Security tab (soft fail) |
-| lint | ESLint | exits on any lint error |
-| dast | ZAP | passive baseline scan, HTML report artifact |
-| lint | ESLint | exits on any lint error |
-| test | Jest | 70% line coverage threshold, coverage artifact uploaded |
-
-All jobs run independently so a failure in one does not block the others.
-
-## setup
-
-Requires Node 18 or later (project uses 22 -- see `.nvmrc`).
+## running it
 
 ```bash
 cp .env.example .env
-npm install
-npm start
+npm install && npm start
 ```
 
-Set `API_KEY` in `.env` to require authentication on all finding routes (`x-api-key` header). Leave it blank to run unauthenticated.
-
-Docker:
+Set `API_KEY` in `.env` to lock down all finding routes. Leave it blank to skip auth.
 
 ```bash
-docker build -t demo-app .
-docker run --env-file .env -p 3000:3000 demo-app
+docker compose up   # app on :3000 + prometheus on :9090
 ```
 
-## pre-commit
+pre-commit (gitleaks runs locally before hitting CI):
 
 ```bash
-pip install pre-commit
-pre-commit install
+pip install pre-commit && pre-commit install
 ```
 
-Runs Gitleaks locally on every commit before anything reaches CI.
+## api
 
-## ingesting scanner output
+`POST /findings` to create, `PATCH /findings/:id` to update status, `GET /findings/summary` for the current posture. Full list at `GET /findings` with filters `?severity=`, `?status=`, `?tool=`, and pagination via `?limit=`/`?offset=`. Single finding at `GET /findings/:id`, delete at `DELETE /findings/:id`. `X-Total-Count` header on list responses.
 
-After a scan, feed the SARIF file into the API:
+Severities: `CRITICAL` `HIGH` `MEDIUM` `LOW`
+
+Statuses: `open` `mitigating` `resolved`
 
 ```bash
-# local scan output
+# ingest a sarif file
 node scripts/ingest-sarif.js trivy.sarif
 
-# against a remote instance with auth
+# remote instance with auth
 API_KEY=secret node scripts/ingest-sarif.js semgrep.sarif http://your-host:3000
-
-# via make
-make ingest SARIF=trivy.sarif API=http://your-host:3000
 ```
 
-The script maps SARIF severity levels (`error`, `warning`, `note`) to `CRITICAL`, `HIGH`, `MEDIUM` and posts each result as a new finding.
-
-## endpoints
-
-| method | path | description |
-|--------|------|-------------|
-| GET | /health | liveness |
-| GET | /version | package version |
-| GET | /findings/summary | counts grouped by severity and status |
-| GET | /findings | list -- `?severity=`, `?status=`, `?tool=`, `?limit=`, `?offset=` |
-| GET | /findings/:id | single finding |
-| POST | /findings | create |
-| PATCH | /findings/:id | update status or any field |
-| DELETE | /findings/:id | remove |
-
-`GET /findings` returns `X-Total-Count` in the response header.
-
-POST body:
-
-```json
-{
-  "tool": "trivy",
-  "severity": "HIGH",
-  "title": "CVE-2019-10744 in lodash 4.17.4",
-  "description": "prototype pollution via _.merge()",
-  "file": "package.json"
-}
-```
-
-Summary response:
-
-```json
-{
-  "total": 4,
-  "bySeverity": { "CRITICAL": 1, "HIGH": 2, "MEDIUM": 1 },
-  "byStatus": { "open": 3, "mitigating": 1 }
-}
-```
-
-Severity: `CRITICAL` `HIGH` `MEDIUM` `LOW`
-
-Status: `open` `mitigating` `resolved`
+Prometheus metrics at `GET /metrics`. Example query: `findings_total{severity="CRITICAL",status="open"}`.
 
 ## kubernetes
 
 ```bash
-# apply everything to a local cluster (kind, minikube, k3s)
 kubectl apply -f k8s/namespace.yaml
-kubectl apply -f k8s/secret.example.yaml   # edit api-key first
+# edit the api-key value in k8s/secret.example.yaml first
 kubectl apply -f k8s/
-
-# check rollout
 kubectl rollout status deployment/findings-tracker -n findings-tracker
 ```
 
-The deployment runs 2 replicas minimum, scales to 5 at 70% CPU (HPA), enforces a NetworkPolicy that restricts egress to DNS only, and sets the full hardened security context: non-root, read-only filesystem, no privilege escalation, all capabilities dropped.
-
-## metrics
-
-`GET /metrics` returns Prometheus-compatible text. Run the full observability stack locally:
-
-```bash
-docker compose up
-```
-
-Then open `http://localhost:9090` for Prometheus. Example query:
-
-```
-findings_total{severity="CRITICAL", status="open"}
-```
+2 replicas, HPA to 5 at 70% CPU, NetworkPolicy with egress restricted to DNS, non-root with read-only filesystem and all capabilities dropped.
 
 ## known issues (intentional)
 
-- `src/index.js` has a hardcoded AWS key -- Gitleaks detects it on every run
-- `lodash` is pinned to `4.17.4`. The PATCH route calls `_.merge({}, finding, req.body, ...)` with user-controlled input, which is the prototype pollution gadget from that version. The tracker ships with the CVE it tracks.
-- `npm audit --audit-level=high` fails because of the lodash pin
+- hardcoded AWS key in `src/index.js` -- Gitleaks catches it every run
+- lodash pinned to `4.17.4`. `PATCH /findings/:id` uses `_.merge()` with user input -- prototype pollution gadget from that CVE. the tracker ships with the vulnerability it tracks
+- npm audit fails on HIGH because of the lodash pin
