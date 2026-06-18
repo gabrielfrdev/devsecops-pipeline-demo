@@ -4,7 +4,7 @@
 
 Security scanners generate a lot of findings. Those findings usually end up sitting in CI logs, buried in SARIF files, or in a GitHub Security tab that nobody opens. This project is a REST API that gives those findings somewhere to land and be tracked through remediation.
 
-Every push runs 7 security jobs in parallel: Gitleaks for secrets, npm audit for dependency CVEs, Semgrep for SAST, Trivy for the container image, Checkov for IaC, ESLint, and Jest. Semgrep, Trivy, and Checkov upload SARIF to the GitHub Security tab. After a scan, `scripts/ingest-sarif.js` reads the SARIF output and posts each result into the API, where findings move from `open` to `mitigating` to `resolved`. When a finding is resolved, `closedAt` is stamped -- subtract `createdAt` for MTTR.
+Every push runs 8 security jobs in parallel: Gitleaks for secrets, npm audit for dependency CVEs, Semgrep for SAST, Trivy for the container image, Checkov for IaC, ZAP for DAST, ESLint, and Jest. Semgrep, Trivy, and Checkov upload SARIF to the GitHub Security tab. After a scan, `scripts/ingest-sarif.js` reads the SARIF output and posts each result into the API, where findings move from `open` to `mitigating` to `resolved`. When a finding is resolved, `closedAt` is stamped -- subtract `createdAt` for MTTR. The API exposes a Prometheus-compatible `/metrics` endpoint for observability.
 
 The API itself is a bit self-referential: `lodash` is pinned to `4.17.4` (prototype pollution via `_.merge`) and there is a hardcoded AWS key in `src/index.js` that Gitleaks catches on every run. The tracker ships with the vulnerabilities it tracks.
 
@@ -17,6 +17,8 @@ The API itself is a bit self-referential: `lodash` is pinned to `4.17.4` (protot
 | sast | Semgrep | SARIF uploaded to Security tab |
 | container | Trivy | SARIF uploaded to Security tab + CycloneDX SBOM artifact |
 | iac | Checkov | SARIF uploaded to Security tab (soft fail) |
+| lint | ESLint | exits on any lint error |
+| dast | ZAP | passive baseline scan, HTML report artifact |
 | lint | ESLint | exits on any lint error |
 | test | Jest | 70% line coverage threshold, coverage artifact uploaded |
 
@@ -107,6 +109,34 @@ Summary response:
 Severity: `CRITICAL` `HIGH` `MEDIUM` `LOW`
 
 Status: `open` `mitigating` `resolved`
+
+## kubernetes
+
+```bash
+# apply everything to a local cluster (kind, minikube, k3s)
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/secret.example.yaml   # edit api-key first
+kubectl apply -f k8s/
+
+# check rollout
+kubectl rollout status deployment/findings-tracker -n findings-tracker
+```
+
+The deployment runs 2 replicas minimum, scales to 5 at 70% CPU (HPA), enforces a NetworkPolicy that restricts egress to DNS only, and sets the full hardened security context: non-root, read-only filesystem, no privilege escalation, all capabilities dropped.
+
+## metrics
+
+`GET /metrics` returns Prometheus-compatible text. Run the full observability stack locally:
+
+```bash
+docker compose up
+```
+
+Then open `http://localhost:9090` for Prometheus. Example query:
+
+```
+findings_total{severity="CRITICAL", status="open"}
+```
 
 ## known issues (intentional)
 
